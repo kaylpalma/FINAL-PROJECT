@@ -1,0 +1,252 @@
+import tkinter as tk
+import math
+import re
+
+class AllenIversonScientificCalculator:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("AI (Allen Iverson) Scientific Calculator")
+        self.root.geometry("500x650")
+        self.root.resizable(False, False)
+        self.root.configure(bg="black")
+
+        self.expression = ""
+        self.result = ""
+        self.shift_pressed = False
+        self.power_on = False
+
+        # ================= DISPLAY =================
+        self.display = tk.Text(
+            root,
+            height=2,
+            font=("Arial", 20),
+            bd=6,
+            relief=tk.RIDGE,
+            bg="white",
+            fg="black",
+            insertbackground="black"
+        )
+        self.display.pack(fill="both", padx=10, pady=10)
+        self.display.insert("1.0", "\n")
+        self.display.configure(state="disabled")  # OFF initially
+
+        # ================= BUTTON FRAME =================
+        btn_frame = tk.Frame(root, bg="black")
+        btn_frame.pack()
+
+        self.buttons = []
+        layout = [
+            ["ON", "SHIFT", "CA", "DEL"],
+            ["↑", "↓", "←", "→"],
+            ["√", "x²", "x^y", "π"],  # LN removed, replaced with x²
+            ["sin", "cos", "tan", "log"],
+            ["7", "8", "9", "x"],
+            ["4", "5", "6", "-"],
+            ["1", "2", "3", "+"],
+            ["0", ".", "(", ")"],
+            ["π", "e", "a/b", "="]  # fraction button
+        ]
+
+        for r, row in enumerate(layout):
+            for c, text in enumerate(row):
+                btn = tk.Button(
+                    btn_frame,
+                    text=text,
+                    width=8,
+                    height=2,
+                    font=("Arial", 12),
+                    bg="#D9D9D9",
+                    command=lambda t=text: self.on_button_click(t)
+                )
+                btn.grid(row=r, column=c, padx=2, pady=2)
+                self.buttons.append(btn)
+
+    # ================= BUTTON HANDLER =================
+    def on_button_click(self, key):
+        # ON always works
+        if key == "ON":
+            if not self.power_on:
+                self.power_on_calc()
+            return
+
+        # Ignore everything else if OFF
+        if not self.power_on:
+            return
+
+        # SHIFT
+        if key == "SHIFT":
+            self.shift_pressed = True
+            return
+
+        # CA
+        if key == "CA":
+            if self.shift_pressed:  # SHIFT+CA = power off
+                self.power_off_calc()
+            else:
+                self.clear_all()
+            self.shift_pressed = False
+            return
+
+        # DEL
+        if key == "DEL":
+            self.delete_at_cursor()
+            return
+
+        # =
+        if key == "=":
+            self.calculate()
+            return
+
+        # Scientific functions
+        if key == "√":
+            self.insert_text("√(")
+            return
+        if key == "x²":
+            self.insert_text("**2")
+            return
+        if key == "x^y":
+            self.insert_text("**")
+            return
+        if key in ["sin", "cos", "tan", "log"]:
+            self.insert_text(f"{key}(")
+            return
+        if key == "π":
+            self.insert_text(str(math.pi))
+            return
+        if key == "e":
+            self.insert_text(str(math.e))
+            return
+
+        # Fraction button
+        if key == "a/b":
+            self.insert_text("/")
+            return
+
+        # Cursor movement
+        if key == "←":
+            self.move_left()
+            return
+        if key == "→":
+            self.move_right()
+            return
+        if key == "↑":
+            self.move_up()
+            return
+        if key == "↓":
+            self.move_down()
+            return
+
+        # Numbers / operators
+        self.insert_text(key)
+
+    # ================= POWER ON/OFF =================
+    def power_on_calc(self):
+        self.power_on = True
+        self.shift_pressed = False
+        self.expression = ""
+        self.result = ""
+
+        # Show blinking typing cursor
+        self.display.configure(state="normal")
+        self.display.delete("1.0", "end")
+        self.display.insert("1.0", "\n")
+        self.display.mark_set("insert", "1.0")
+        self.display.focus_set()
+
+    def power_off_calc(self):
+        self.power_on = False
+        self.shift_pressed = False
+        self.expression = ""
+        self.result = ""
+        self.display.delete("1.0", "end")
+        self.display.insert("1.0", "\n")
+        self.display.configure(state="disabled")
+
+    # ================= CURSOR FUNCTIONS =================
+    def move_left(self):
+        try:
+            self.display.mark_set("insert", "insert -1c")
+            self.prevent_answer_edit()
+        except:
+            pass
+
+    def move_right(self):
+        try:
+            self.display.mark_set("insert", "insert +1c")
+            self.prevent_answer_edit()
+        except:
+            pass
+
+    def move_up(self):
+        self.display.mark_set("insert", "1.end")
+
+    def move_down(self):
+        self.display.mark_set("insert", "2.end")
+
+    def prevent_answer_edit(self):
+        line, col = map(int, self.display.index("insert").split("."))
+        if line == 2:
+            self.display.mark_set("insert", "1.end")
+
+    # ================= CORE FUNCTIONS =================
+    def clear_all(self):
+        self.expression = ""
+        self.result = ""
+        self.display.configure(state="normal")
+        self.display.delete("1.0", "end")
+        self.display.insert("1.0", "\n")
+        self.display.mark_set("insert", "1.0")
+
+    def insert_text(self, value):
+        line, col = map(int, self.display.index("insert").split("."))
+        if line == 2:
+            return
+        cursor = self.display.index("insert")
+        self.display.insert(cursor, value)
+        self.update_expression()
+
+    def delete_at_cursor(self):
+        line, col = map(int, self.display.index("insert").split("."))
+        if line == 2 or col == 0:
+            return
+        self.display.delete(f"{line}.{col-1}")
+        self.update_expression()
+
+    def update_expression(self):
+        self.expression = self.display.get("1.0", "1.end")
+        self.refresh_display()
+
+    def refresh_display(self):
+        cursor = self.display.index("insert")
+        self.display.delete("1.0", "end")
+        self.display.insert("1.0", self.expression + "\n" + self.result)
+        self.display.mark_set("insert", cursor)
+
+    def calculate(self):
+        try:
+            expr = self.expression
+            expr = expr.replace("x", "*")
+            expr = expr.replace("√", "math.sqrt")
+            expr = expr.replace("sin(", "math.sin(")
+            expr = expr.replace("cos(", "math.cos(")
+            expr = expr.replace("tan(", "math.tan(")
+            expr = expr.replace("log(", "math.log10(")
+
+            # Automatic multiplication fixes like 35(46)
+            expr = re.sub(r'(\d)\(', r'\1*(', expr)
+            expr = re.sub(r'\)(\d)', r')*\1', expr)
+            expr += ")" * (expr.count("(") - expr.count(")"))
+
+            self.result = str(eval(expr))
+        except:
+            self.result = "Error"
+
+        self.refresh_display()
+
+
+# ================= RUN =================
+if __name__ == "__main__":
+    root = tk.Tk()
+    AllenIversonScientificCalculator(root)
+    root.mainloop()
+
